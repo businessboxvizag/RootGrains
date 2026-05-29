@@ -1,0 +1,15 @@
+{
+  "appId": "com.rootgrains.app",
+  "appName": "Root Grains",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#3b1f0e",
+      "showSpinner": false
+    }
+  }
+}

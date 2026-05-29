@@ -1,0 +1,144 @@
+import {
+  collection, doc, addDoc, updateDoc, getDocs, getDoc,
+  query, orderBy, serverTimestamp, setDoc, increment, onSnapshot, deleteDoc
+} from "firebase/firestore";
+import { db } from "../firebase";
+
+// ─── ORDERS ──────────────────────────────────────────────────────────────────
+export async function createOrder(orderData) {
+  const ref = await addDoc(collection(db, "orders"), {
+    ...orderData,
+    status: "pending",
+    createdAt: serverTimestamp(),
+  });
+  await incrementAnalytic("totalOrders");
+  await incrementAnalytic("totalRevenue", orderData.total);
+  return ref.id;
+}
+
+export async function getOrders() {
+  const snap = await getDocs(query(collection(db, "orders"), orderBy("createdAt", "desc")));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export function subscribeOrders(callback) {
+  return onSnapshot(
+    query(collection(db, "orders"), orderBy("createdAt", "desc")),
+    snap => callback(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+  );
+}
+
+export async function updateOrderStatus(orderId, status) {
+  await updateDoc(doc(db, "orders", orderId), { status, updatedAt: serverTimestamp() });
+}
+
+// ─── PRODUCTS ────────────────────────────────────────────────────────────────
+export async function getProducts() {
+  const snap = await getDocs(query(collection(db, "products"), orderBy("category")));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export function subscribeProducts(callback) {
+  return onSnapshot(collection(db, "products"), snap =>
+    callback(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+  );
+}
+
+export async function addProduct(data) {
+  return await addDoc(collection(db, "products"), { ...data, createdAt: serverTimestamp() });
+}
+
+export async function updateProduct(id, data) {
+  await updateDoc(doc(db, "products", id), { ...data, updatedAt: serverTimestamp() });
+}
+
+export async function deleteProduct(id) {
+  await deleteDoc(doc(db, "products", id));
+}
+
+export async function seedProductsIfEmpty(products) {
+  const snap = await getDocs(collection(db, "products"));
+  if (!snap.empty) return;
+  for (const p of products) {
+    await setDoc(doc(db, "products", p.id), { ...p, stock: 100, active: true, createdAt: serverTimestamp() });
+  }
+}
+
+// ─── CUSTOMERS ───────────────────────────────────────────────────────────────
+export async function saveCustomer(uid, data) {
+  await setDoc(doc(db, "customers", uid), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+export async function getCustomers() {
+  const snap = await getDocs(query(collection(db, "customers"), orderBy("createdAt", "desc")));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function getCustomer(uid) {
+  const snap = await getDoc(doc(db, "customers", uid));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+// ─── ANALYTICS ───────────────────────────────────────────────────────────────
+export async function incrementAnalytic(field, amount = 1) {
+  const ref = doc(db, "analytics", "global");
+  await setDoc(ref, { [field]: increment(amount) }, { merge: true });
+}
+
+export async function getAnalytics() {
+  const global = await getDoc(doc(db, "analytics", "global"));
+  const views = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split("T")[0];
+    const snap = await getDoc(doc(db, "analytics", `pageviews_${dateStr}`));
+    views.push({ date: dateStr, data: snap.exists() ? snap.data() : {} });
+  }
+  return { global: global.exists() ? global.data() : {}, views };
+}
+
+// ─── BANNERS ─────────────────────────────────────────────────────────────────
+export async function getBanners() {
+  const snap = await getDocs(collection(db, "banners"));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function toggleBanner(id, active) {
+  await updateDoc(doc(db, "banners", id), { active });
+}
+
+export async function addBanner(data) {
+  return await addDoc(collection(db, "banners"), { ...data, createdAt: serverTimestamp() });
+}
+
+export async function deleteBanner(id) {
+  await deleteDoc(doc(db, "banners", id));
+}
+
+export async function seedBannersIfEmpty() {
+  const snap = await getDocs(collection(db, "banners"));
+  if (!snap.empty) return;
+  const defaults = [
+    { title: "Festival Special — Up to 20% Off", active: true, type: "Offer" },
+    { title: "New Arrival: Little Millet Now Available", active: true, type: "Announcement" },
+    { title: "Free Delivery on Orders Above ₹200", active: false, type: "Promotion" },
+  ];
+  for (const b of defaults) {
+    await addDoc(collection(db, "banners"), { ...b, createdAt: serverTimestamp() });
+  }
+}
+
+// ─── PAGE VIEWS (used by CheckoutPage and other storefront pages) ─────────────
+export async function logPageView(page) {
+  const today = new Date().toISOString().split("T")[0];
+  const ref = doc(db, "analytics", `pageviews_${today}`);
+  await setDoc(ref, { [page]: increment(1), date: today }, { merge: true });
+}
+
+// ─── GET SINGLE PRODUCT BY ID ────────────────────────────────────────────────
+export async function getProductById(id) {
+  const ref = doc(db, "products", id);
+  const snap = await getDoc(ref);
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
