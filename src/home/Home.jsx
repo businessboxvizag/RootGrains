@@ -121,7 +121,7 @@ function Home() {
         </div>
         <button
           onClick={() => setShowPincodeModal(true)}
-          style={{ flexShrink: 0, background: "rgba(255,255,255,0.25)", border: "1px solid rgba(255,255,255,0.5)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer", marginRight: 8, whiteSpace: "nowrap" }}
+          style={{ flexShrink: 0, background: "#3b1f0e", border: "none", borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer", marginRight: 8, whiteSpace: "nowrap", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }}
         >
           Check here
         </button>
