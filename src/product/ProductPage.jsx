@@ -128,13 +128,13 @@ function ProductPage() {
 
         {/* Product details table */}
         <div style={{ background: "#fff", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#3b1f0e", marginBottom: 10 }}>{t.aboutDesc || "Product Details"}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#3b1f0e", marginBottom: 10 }}>Product Details</div>
           {[
             [t.type || "Type", productType],
             ["Selected Weight", selected.weight],
             ["Price per kg", `₹${selected.perKgPrice}/kg`],
-            [t.shelfLife || "Shelf Life", "12 months"],
-            [t.storageInstructions || "Storage", "Store in a cool, dry place"],
+            ["Shelf Life", product.shelfLife || "12 months"],
+            ["Storage", "Store in a cool, dry place"],
           ].map(([label, value]) => (
             <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #f5f0ea", fontSize: 13 }}>
               <span style={{ color: "#888" }}>{label}</span>

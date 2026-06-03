@@ -119,7 +119,9 @@ export default function CategoryPage() {
 
   const allCatProducts = allProducts.filter(p => p.category === slug && p.active !== false);
   const filteredProducts = isNonBasmati && activeSub !== "all"
-    ? allCatProducts.filter(p => p.subCategory === activeSub)
+    ? allCatProducts.filter(p =>
+        p.subCategories?.includes(activeSub) || p.subCategory === activeSub
+      )
     : allCatProducts;
 
   const title = t[meta.titleKey] || meta.titleKey;

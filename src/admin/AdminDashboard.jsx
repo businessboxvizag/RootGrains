@@ -146,44 +146,125 @@ function OrdersView({ orders, onStatusUpdate }) {
   );
 }
 
+// Fixed weight options per category
+const CATEGORY_WEIGHTS = {
+  "non-basmati": ["5 kg", "10 kg", "26 kg"],
+  "basmati":     ["5 kg", "10 kg", "26 kg", "30 kg"],
+  "millets":     ["500 g", "1 kg", "2 kg"],
+};
+
+const NON_BASMATI_SUBCATS = [
+  { key: "sona-masoorie", label: "Sona Masoorie" },
+  { key: "steam-rice",    label: "Steam Rice" },
+  { key: "raw-rice",      label: "Raw Rice" },
+  { key: "half-boiled",   label: "Half Boiled" },
+];
+
+// Parse weight string to kg value for per-kg calculation
+function weightToKg(w) {
+  if (!w) return 1;
+  if (w.includes("g") && !w.toLowerCase().includes("kg")) return parseFloat(w) / 1000;
+  return parseFloat(w) || 1;
+}
+
+function calcPerKg(price, weight) {
+  const kg = weightToKg(weight);
+  return kg > 0 ? Math.round(price / kg) : 0;
+}
+
+// Build default variant rows for a category (all weights, price empty)
+function defaultVariants(category) {
+  return (CATEGORY_WEIGHTS[category] || CATEGORY_WEIGHTS["non-basmati"]).map(w => ({
+    weight: w, price: "", enabled: true,
+  }));
+}
+
+// Resize image via canvas and return base64
+function resizeImage(file, maxDim = 900, quality = 0.8) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width: w, height: h } = img;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function ProductsView({ products, onAdd, onDelete, onUpdate }) {
-  const emptyForm = { name: "", category: "non-basmati", subCategory: "", stock: "", description: "", imageUrl: "", active: true };
-  const emptyVariant = { weight: "", price: "", perKgPrice: "" };
-  const riceVariants = () => [
-    { weight: "5 kg",  price: "", perKgPrice: "" },
-    { weight: "10 kg", price: "", perKgPrice: "" },
-    { weight: "25 kg", price: "", perKgPrice: "" },
-  ];
-  const milletVariants = () => [
-    { weight: "500 g", price: "", perKgPrice: "" },
-    { weight: "1 kg",  price: "", perKgPrice: "" },
-  ];
+  const emptyForm = { name: "", category: "non-basmati", subCategories: [], shelfLife: "12 months", stock: "", description: "", imageUrl: "", active: true };
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const [variants, setVariants] = useState(riceVariants());
+  const [variants, setVariants] = useState(defaultVariants("non-basmati"));
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState("");
   const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #ddd", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
   const lbl = { fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 4, display: "block" };
 
-  const addVariantRow = () => setVariants(v => [...v, { ...emptyVariant }]);
-  const removeVariantRow = (i) => setVariants(v => v.filter((_, idx) => idx !== i));
-  const updateVariant = (i, field, val) => setVariants(v => v.map((row, idx) => idx === i ? { ...row, [field]: val } : row));
+  const resetForm = () => { setForm(emptyForm); setVariants(defaultVariants("non-basmati")); setPreview(""); setEditId(null); };
+
+  const handleCategoryChange = (cat) => {
+    setForm(f => ({ ...f, category: cat, subCategories: [] }));
+    setVariants(defaultVariants(cat));
+  };
+
+  const toggleSubCat = (key) => {
+    setForm(f => ({
+      ...f,
+      subCategories: f.subCategories.includes(key)
+        ? f.subCategories.filter(s => s !== key)
+        : [...f.subCategories, key],
+    }));
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const base64 = await resizeImage(file);
+    setPreview(base64);
+    setForm(f => ({ ...f, imageUrl: base64 }));
+  };
+
+  const updatePrice = (i, price) => {
+    setVariants(v => v.map((row, idx) => idx === i ? { ...row, price } : row));
+  };
+  const toggleVariant = (i) => {
+    setVariants(v => v.map((row, idx) => idx === i ? { ...row, enabled: !row.enabled } : row));
+  };
 
   const handleSubmit = async () => {
-    if (!form.name) return alert("Product name is required.");
-    if (variants.length === 0 || !variants[0].weight || !variants[0].price) return alert("Add at least one weight variant with weight and price.");
+    if (!form.name.trim()) return alert("Product name is required.");
+    const enabled = variants.filter(v => v.enabled && v.price);
+    if (enabled.length === 0) return alert("Enable at least one weight and enter its price.");
     setSaving(true);
-    const cleanVariants = variants.map(v => ({
+    const cleanVariants = enabled.map(v => ({
       weight: v.weight,
       price: Number(v.price),
-      perKgPrice: Number(v.perKgPrice) || 0,
+      perKgPrice: calcPerKg(Number(v.price), v.weight),
     }));
     const data = {
-      ...form,
+      name: form.name,
+      category: form.category,
+      subCategories: form.subCategories,
+      // backward compat: keep subCategory as first item
+      subCategory: form.subCategories[0] || "",
+      shelfLife: form.shelfLife || "12 months",
       stock: Number(form.stock) || 0,
-      // Use first variant as the default price/weight shown on cards
+      description: form.description || "",
+      imageUrl: form.imageUrl || "",
+      active: form.active,
       weight: cleanVariants[0].weight,
       price: cleanVariants[0].price,
       perKgPrice: cleanVariants[0].perKgPrice,
@@ -191,29 +272,32 @@ function ProductsView({ products, onAdd, onDelete, onUpdate }) {
     };
     try {
       if (editId) { await onUpdate(editId, data); } else { await onAdd(data); }
-      setForm(emptyForm); setVariants([{ ...emptyVariant }]); setPreview(""); setShowForm(false); setEditId(null);
+      resetForm(); setShowForm(false);
     } catch (err) {
       console.error("Save failed:", err);
-      alert("Error saving product: " + err.message);
+      alert("Error saving: " + err.message);
     }
     setSaving(false);
   };
 
   const startEdit = (p) => {
+    const cat = p.category || "non-basmati";
+    const fixedWeights = CATEGORY_WEIGHTS[cat] || CATEGORY_WEIGHTS["non-basmati"];
+    // Map existing variants onto fixed weight slots
+    const editVariants = fixedWeights.map(w => {
+      const existing = p.variants?.find(v => v.weight === w);
+      return { weight: w, price: existing ? String(existing.price) : "", enabled: !!existing };
+    });
     setForm({
       name: p.name || p.nameKey || "",
-      category: p.category || "non-basmati",
-      subCategory: p.subCategory || "",
+      category: cat,
+      subCategories: p.subCategories || (p.subCategory ? [p.subCategory] : []),
+      shelfLife: p.shelfLife || "12 months",
       stock: p.stock || "",
       description: p.description || "",
       imageUrl: p.imageUrl || p.image || p.img || "",
       active: p.active !== false,
     });
-    const editVariants = p.variants?.length
-      ? p.variants.map(v => ({ weight: v.weight, price: String(v.price), perKgPrice: String(v.perKgPrice || "") }))
-      : p.category === "millets"
-        ? milletVariants()
-        : riceVariants();
     setVariants(editVariants);
     setPreview(p.imageUrl || p.image || p.img || "");
     setEditId(p.id);
@@ -225,84 +309,133 @@ function ProductsView({ products, onAdd, onDelete, onUpdate }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: "#3b1f0e" }}>Products</h2>
-        <button onClick={() => { setShowForm(!showForm); setEditId(null); setForm(emptyForm); setVariants(riceVariants()); setPreview(""); }} style={{ padding: "9px 18px", background: "#3b1f0e", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600 }}>{showForm ? "✕ Cancel" : "+ Add Product"}</button>
+        <button onClick={() => { if (showForm) { resetForm(); } setShowForm(!showForm); }} style={{ padding: "9px 18px", background: "#3b1f0e", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600 }}>{showForm ? "✕ Cancel" : "+ Add Product"}</button>
       </div>
+
       {showForm && (
         <div style={{ background: "#fff", borderRadius: 12, padding: 24, marginBottom: 20, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: "#3b1f0e" }}>{editId ? "Edit Product" : "Add New Product"}</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <div><label style={lbl}>Product Name *</label><input style={inp} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Sona Masoorie Raw Rice" /></div>
-            <div><label style={lbl}>Category</label>
-              <select style={inp} value={form.category} onChange={e => {
-                const cat = e.target.value;
-                setForm(f => ({ ...f, category: cat, subCategory: "" }));
-                setVariants(cat === "millets" ? milletVariants() : riceVariants());
-              }}>
+
+            {/* Name */}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={lbl}>Product Name *</label>
+              <input style={inp} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Sona Masoorie Raw Rice" />
+            </div>
+
+            {/* Category */}
+            <div>
+              <label style={lbl}>Category</label>
+              <select style={inp} value={form.category} onChange={e => handleCategoryChange(e.target.value)}>
                 <option value="non-basmati">Non-Basmati Rice</option>
                 <option value="basmati">Basmati Rice</option>
                 <option value="millets">Millets</option>
               </select>
             </div>
+
+            {/* Shelf Life */}
+            <div>
+              <label style={lbl}>Shelf Life</label>
+              <input style={inp} value={form.shelfLife} onChange={e => setForm(f => ({ ...f, shelfLife: e.target.value }))} placeholder="e.g. 12 months" />
+            </div>
+
+            {/* Sub-categories (non-basmati only, multi-select) */}
             {form.category === "non-basmati" && (
-              <div><label style={lbl}>Sub-Category</label>
-                <select style={inp} value={form.subCategory} onChange={e => setForm(f => ({ ...f, subCategory: e.target.value }))}>
-                  <option value="">— None —</option>
-                  <option value="sona-masoorie">Sona Masoorie</option>
-                  <option value="steam-rice">Steam Rice</option>
-                  <option value="raw-rice">Raw Rice</option>
-                  <option value="half-boiled">Half Boiled</option>
-                </select>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={lbl}>Sub-Categories (select all that apply)</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {NON_BASMATI_SUBCATS.map(sc => {
+                    const active = form.subCategories.includes(sc.key);
+                    return (
+                      <button key={sc.key} onClick={() => toggleSubCat(sc.key)}
+                        style={{ padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${active ? "#3b1f0e" : "#ddd"}`, background: active ? "#3b1f0e" : "#fff", color: active ? "#fff" : "#555", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                        {active ? "✓ " : ""}{sc.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
-            <div><label style={lbl}>Stock Quantity</label><input style={inp} type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} placeholder="e.g. 100" /></div>
-            <div><label style={lbl}>Active</label>
+
+            {/* Stock & Active */}
+            <div>
+              <label style={lbl}>Stock Quantity</label>
+              <input style={inp} type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} placeholder="e.g. 100" />
+            </div>
+            <div>
+              <label style={lbl}>Visible on Store</label>
               <select style={inp} value={form.active ? "true" : "false"} onChange={e => setForm(f => ({ ...f, active: e.target.value === "true" }))}>
-                <option value="true">Yes — Visible on store</option>
+                <option value="true">Yes — Show on store</option>
                 <option value="false">No — Hidden</option>
               </select>
             </div>
+
+            {/* Image upload */}
             <div style={{ gridColumn: "1 / -1" }}>
-              <label style={lbl}>Product Image URL</label>
-              <input style={inp} value={form.imageUrl} onChange={e => { setForm(f => ({ ...f, imageUrl: e.target.value })); setPreview(e.target.value); }} placeholder="Paste image URL (https://...)" />
-              {preview && <img src={preview} alt="preview" style={{ marginTop: 8, height: 80, borderRadius: 6, objectFit: "cover" }} onError={() => setPreview("")} />}
-              <div style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>Tip: Upload to imgbb.com and paste the link here.</div>
-            </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={lbl}>Description</label>
-              <textarea style={{ ...inp, resize: "vertical", minHeight: 80 }} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe the product — origin, quality, usage..." />
+              <label style={lbl}>Product Image</label>
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <input style={inp} value={form.imageUrl.startsWith("data:") ? "" : form.imageUrl}
+                    onChange={e => { setForm(f => ({ ...f, imageUrl: e.target.value })); setPreview(e.target.value); }}
+                    placeholder="Paste image URL (https://...)" />
+                  <div style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>or upload from device ↓</div>
+                </div>
+                <label style={{ padding: "9px 16px", background: "#e8f5e9", color: "#2e7d32", border: "1.5px dashed #a5d6a7", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  📷 Upload Photo
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} />
+                </label>
+              </div>
+              {preview && (
+                <div style={{ marginTop: 8, position: "relative", display: "inline-block" }}>
+                  <img src={preview} alt="preview" style={{ height: 100, borderRadius: 8, objectFit: "cover" }} onError={() => setPreview("")} />
+                  <button onClick={() => { setPreview(""); setForm(f => ({ ...f, imageUrl: "" })); }}
+                    style={{ position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: "50%", background: "#c62828", color: "#fff", border: "none", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                </div>
+              )}
             </div>
 
-            {/* Weight Variants */}
+            {/* Description */}
             <div style={{ gridColumn: "1 / -1" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <label style={{ ...lbl, marginBottom: 0 }}>Weight & Price Variants *</label>
-                <button onClick={addVariantRow} style={{ padding: "5px 14px", background: "#e8f5e9", color: "#2e7d32", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 700 }}>+ Add Weight</button>
-              </div>
+              <label style={lbl}>Description <span style={{ fontWeight: 400, color: "#aaa" }}>(optional)</span></label>
+              <textarea style={{ ...inp, resize: "vertical", minHeight: 70 }} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe the product — origin, quality, usage..." />
+            </div>
+
+            {/* Weight & Price variants */}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={lbl}>Weight Categories & Prices *</label>
               <div style={{ background: "#f9f6f2", borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* Header */}
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 2fr auto", gap: 8 }}>
-                  {["Weight (e.g. 5 kg)", "Price (₹)", "Per Kg Price (₹)", ""].map((h, i) => (
+                <div style={{ display: "grid", gridTemplateColumns: "40px 120px 1fr 120px", gap: 8 }}>
+                  {["", "Weight", "Price (₹)", "Per kg (auto)"].map((h, i) => (
                     <div key={i} style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</div>
                   ))}
                 </div>
                 {variants.map((v, i) => (
-                  <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 2fr 2fr auto", gap: 8, alignItems: "center" }}>
-                    <input style={{ ...inp, padding: "7px 10px" }} value={v.weight} onChange={e => updateVariant(i, "weight", e.target.value)} placeholder="e.g. 5 kg" />
-                    <input style={{ ...inp, padding: "7px 10px" }} type="number" value={v.price} onChange={e => updateVariant(i, "price", e.target.value)} placeholder="e.g. 275" />
-                    <input style={{ ...inp, padding: "7px 10px" }} type="number" value={v.perKgPrice} onChange={e => updateVariant(i, "perKgPrice", e.target.value)} placeholder="e.g. 55" />
-                    <button onClick={() => removeVariantRow(i)} disabled={variants.length === 1} style={{ padding: "7px 10px", background: variants.length === 1 ? "#f0ece8" : "#ffebee", color: variants.length === 1 ? "#ccc" : "#c62828", border: "none", borderRadius: 6, cursor: variants.length === 1 ? "default" : "pointer", fontWeight: 700, fontSize: 14 }}>✕</button>
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "40px 120px 1fr 120px", gap: 8, alignItems: "center", opacity: v.enabled ? 1 : 0.4 }}>
+                    <input type="checkbox" checked={v.enabled} onChange={() => toggleVariant(i)}
+                      style={{ width: 18, height: 18, cursor: "pointer", accentColor: "#3b1f0e" }} />
+                    <div style={{ padding: "8px 10px", background: "#fff", border: "1.5px solid #ddd", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#3b1f0e" }}>{v.weight}</div>
+                    <input style={{ ...inp, padding: "8px 10px" }} type="number" value={v.price}
+                      onChange={e => updatePrice(i, e.target.value)}
+                      disabled={!v.enabled} placeholder="Enter price" />
+                    <div style={{ padding: "8px 10px", background: "#f0ece8", border: "1.5px solid #e0d8d0", borderRadius: 8, fontSize: 13, color: "#666" }}>
+                      {v.price ? `₹${calcPerKg(Number(v.price), v.weight)}/kg` : "—"}
+                    </div>
                   </div>
                 ))}
-                <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>The first row is the default shown on product cards. Add as many weights as this product is sold in.</div>
+                <div style={{ fontSize: 11, color: "#aaa" }}>Check the weights this product is available in and enter the price for each.</div>
               </div>
             </div>
           </div>
+
           <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-            <button onClick={handleSubmit} disabled={saving} style={{ padding: "10px 24px", background: "#3b1f0e", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 700 }}>{saving ? "Saving..." : editId ? "Update Product" : "Add Product"}</button>
-            <button onClick={() => { setShowForm(false); setEditId(null); setForm(emptyForm); setVariants(riceVariants()); setPreview(""); }} style={{ padding: "10px 18px", background: "#f0ece8", color: "#555", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+            <button onClick={handleSubmit} disabled={saving} style={{ padding: "10px 24px", background: "#3b1f0e", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 700 }}>
+              {saving ? "Saving..." : editId ? "Update Product" : "Add Product"}
+            </button>
+            <button onClick={() => { resetForm(); setShowForm(false); }} style={{ padding: "10px 18px", background: "#f0ece8", color: "#555", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer" }}>Cancel</button>
           </div>
         </div>
       )}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
         {products.map(p => (
           <div key={p.id} style={{ background: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", opacity: p.active === false ? 0.6 : 1 }}>
@@ -311,7 +444,7 @@ function ProductsView({ products, onAdd, onDelete, onUpdate }) {
             </div>
             <div style={{ padding: 14 }}>
               <div style={{ fontWeight: 700, fontSize: 14, color: "#3b1f0e", marginBottom: 2 }}>{p.name || p.nameKey}</div>
-              <div style={{ fontSize: 12, color: "#888", marginBottom: 6 }}>{p.weight} · Stock: {p.stock ?? "—"}</div>
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>{p.weight} · Stock: {p.stock ?? "—"}</div>
               {p.description && <div style={{ fontSize: 11, color: "#999", marginBottom: 6, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{p.description}</div>}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: "#e65100" }}>₹{p.price}</div>
