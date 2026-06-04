@@ -139,6 +139,16 @@ export async function logPageView(page) {
   await setDoc(ref, { [page]: increment(1), date: today }, { merge: true });
 }
 
+// ─── USER CART ───────────────────────────────────────────────────────────────
+export async function getFirestoreCart(uid) {
+  const snap = await getDoc(doc(db, "carts", uid));
+  return snap.exists() ? (snap.data().items || []) : [];
+}
+
+export async function saveFirestoreCart(uid, items) {
+  await setDoc(doc(db, "carts", uid), { items, updatedAt: serverTimestamp() });
+}
+
 // ─── USER ADDRESSES ──────────────────────────────────────────────────────────
 export async function getUserAddresses(uid) {
   const snap = await getDoc(doc(db, "customers", uid));

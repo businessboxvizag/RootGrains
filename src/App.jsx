@@ -17,6 +17,7 @@ import BrandsPage from "./brand/BrandsPage";
 import { AdminAuthProvider } from "./admin/AdminAuthContext";
 import { ProductsProvider } from "./ProductsContext";
 import { AuthProvider } from "./auth/AuthContext";
+import { CartProvider } from "./CartContext";
 import SignupPage from "./auth/SignupPage";
 import { useLang } from "./LanguageContext";
 
@@ -51,9 +52,11 @@ function App() {
     <HashRouter>
       <AdminAuthProvider>
         <AuthProvider>
-          <ProductsProvider>
-            <AppRoutes />
-          </ProductsProvider>
+          <CartProvider>
+            <ProductsProvider>
+              <AppRoutes />
+            </ProductsProvider>
+          </CartProvider>
         </AuthProvider>
       </AdminAuthProvider>
     </HashRouter>
