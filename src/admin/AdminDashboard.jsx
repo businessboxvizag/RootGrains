@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAdminAuth } from "./AdminAuthContext";
 import AdminLoginPage from "./AdminLoginPage";
@@ -873,37 +873,147 @@ function CustomersView({ customers, orders }) {
 }
 
 function BannersView({ banners, onToggle, onAdd, onDelete }) {
-  const [form, setForm] = useState({ title: "", type: "Offer" });
+  const emptyForm = { title: "", type: "Offer", discountText: "", bgColor: "#fff8e1", link: "", image: "" };
+  const [form, setForm] = useState(emptyForm);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [imgPreview, setImgPreview] = useState("");
+  const imgRef = useRef();
+
   const inp = { width: "100%", padding: "9px 12px", border: "1.5px solid #ddd", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" };
-  const handleAdd = async () => { if (!form.title) return; setSaving(true); await onAdd({ ...form, active: true }); setForm({ title: "", type: "Offer" }); setShowForm(false); setSaving(false); };
+  const lbl = { fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 4, display: "block" };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const base64 = await resizeImage(file, 1200, 0.82);
+    setForm(f => ({ ...f, image: base64 }));
+    setImgPreview(base64);
+  };
+
+  const handleAdd = async () => {
+    if (!form.title) return;
+    setSaving(true);
+    await onAdd({ ...form, active: true });
+    setForm(emptyForm);
+    setImgPreview("");
+    setShowForm(false);
+    setSaving(false);
+  };
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: "#3b1f0e" }}>Banners & Offers</h2>
-        <button onClick={() => setShowForm(!showForm)} style={{ padding: "9px 18px", background: "#3b1f0e", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600 }}>{showForm ? "✕ Cancel" : "+ Add Banner"}</button>
+        <button onClick={() => { setShowForm(!showForm); setForm(emptyForm); setImgPreview(""); }}
+          style={{ padding: "9px 18px", background: "#3b1f0e", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
+          {showForm ? "✕ Cancel" : "+ Add Banner"}
+        </button>
       </div>
+
       {showForm && (
-        <div style={{ background: "#fff", borderRadius: 12, padding: 20, marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "end" }}>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 4, display: "block" }}>Banner Text</label><input style={inp} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Festival Sale — 20% Off" /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 4, display: "block" }}>Type</label><select style={{ ...inp, width: "auto" }} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}><option>Offer</option><option>Announcement</option><option>Promotion</option></select></div>
+        <div style={{ background: "#fff", borderRadius: 12, padding: 20, marginBottom: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+          <p style={{ fontSize: 12, color: "#888", marginBottom: 14 }}>
+            📌 Offer/Promotion banners with an image will also appear as slides in the Home screen carousel.
+          </p>
+
+          {/* Row 1: Title + Type */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, marginBottom: 12 }}>
+            <div><label style={lbl}>Banner Title *</label>
+              <input style={inp} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Summer Sale — Flat 20% Off" /></div>
+            <div><label style={lbl}>Type</label>
+              <select style={{ ...inp, width: "auto" }} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                <option>Offer</option><option>Announcement</option><option>Promotion</option>
+              </select></div>
           </div>
-          <button onClick={handleAdd} disabled={saving} style={{ marginTop: 12, padding: "9px 20px", background: "#3b1f0e", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600 }}>{saving ? "Saving..." : "Add Banner"}</button>
+
+          {/* Row 2: Discount text + BG color */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, marginBottom: 12, alignItems: "end" }}>
+            <div><label style={lbl}>Discount Text (shown large)</label>
+              <input style={inp} value={form.discountText} onChange={e => setForm(f => ({ ...f, discountText: e.target.value }))} placeholder="e.g. 20% OFF" /></div>
+            <div><label style={lbl}>Card BG Color</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input type="color" value={form.bgColor} onChange={e => setForm(f => ({ ...f, bgColor: e.target.value }))}
+                  style={{ width: 40, height: 36, border: "1.5px solid #ddd", borderRadius: 8, cursor: "pointer", padding: 2 }} />
+                <span style={{ fontSize: 12, color: "#888" }}>{form.bgColor}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 3: Link path */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={lbl}>Shop Link (optional)</label>
+            <input style={inp} value={form.link} onChange={e => setForm(f => ({ ...f, link: e.target.value }))} placeholder="e.g. /search or /category/basmati" />
+          </div>
+
+          {/* Row 4: Image upload */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={lbl}>Banner Image (for hero carousel slide)</label>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              {imgPreview ? (
+                <div style={{ position: "relative" }}>
+                  <img src={imgPreview} alt="preview" style={{ width: 160, height: 90, objectFit: "cover", borderRadius: 8, border: "1.5px solid #ddd" }} />
+                  <button onClick={() => { setImgPreview(""); setForm(f => ({ ...f, image: "" })); }}
+                    style={{ position: "absolute", top: 4, right: 4, background: "#c62828", color: "#fff", border: "none", borderRadius: 50, width: 20, height: 20, fontSize: 12, cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                </div>
+              ) : (
+                <div onClick={() => imgRef.current?.click()}
+                  style={{ width: 160, height: 90, border: "2px dashed #ccc", borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#fafafa", gap: 4 }}>
+                  <span style={{ fontSize: 24 }}>🖼️</span>
+                  <span style={{ fontSize: 11, color: "#888" }}>Upload image</span>
+                </div>
+              )}
+              <input ref={imgRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} />
+              <div style={{ fontSize: 11, color: "#aaa", lineHeight: 1.5, paddingTop: 4 }}>
+                Recommended: 1200×600px landscape.<br />
+                Will show as a background slide<br />in the home screen carousel.
+              </div>
+            </div>
+          </div>
+
+          <button onClick={handleAdd} disabled={saving}
+            style={{ padding: "10px 24px", background: "#3b1f0e", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
+            {saving ? "Saving..." : "Add Banner"}
+          </button>
         </div>
       )}
+
+      {/* Banner list */}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {banners.map(b => (
-          <div key={b.id} style={{ background: "#fff", borderRadius: 10, padding: "16px 20px", boxShadow: "0 2px 6px rgba(0,0,0,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 14 }}>{b.title}</div><span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 10, background: "#f0ece8", color: "#3b1f0e", fontWeight: 600, marginTop: 4, display: "inline-block" }}>{b.type}</span></div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 12, color: b.active ? "#2e7d32" : "#aaa", fontWeight: 600 }}>{b.active ? "● Live" : "○ Off"}</span>
-              <button onClick={() => onToggle(b.id, !b.active)} style={{ padding: "6px 14px", background: b.active ? "#ffebee" : "#e8f5e9", color: b.active ? "#c62828" : "#2e7d32", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600 }}>{b.active ? "Turn Off" : "Turn On"}</button>
-              <button onClick={() => { if (window.confirm("Delete banner?")) onDelete(b.id); }} style={{ padding: "6px 12px", background: "#fff0f0", color: "#c62828", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>🗑</button>
+          <div key={b.id} style={{ background: "#fff", borderRadius: 10, boxShadow: "0 2px 6px rgba(0,0,0,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, overflow: "hidden" }}>
+            {/* Thumbnail or color swatch */}
+            {b.image ? (
+              <img src={b.image} alt={b.title} style={{ width: 72, height: 56, objectFit: "cover", flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 72, height: 56, background: b.bgColor || "#fff8e1", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+                {b.type === "Announcement" ? "📢" : "🏷️"}
+              </div>
+            )}
+            <div style={{ flex: 1, padding: "10px 0" }}>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{b.title}</div>
+              <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "#f0ece8", color: "#3b1f0e", fontWeight: 600 }}>{b.type}</span>
+                {b.discountText && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "#fff3cd", color: "#856404", fontWeight: 700 }}>{b.discountText}</span>}
+                {b.image && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "#e8f5e9", color: "#2e7d32", fontWeight: 600 }}>🖼 Has image</span>}
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, paddingRight: 14 }}>
+              <span style={{ fontSize: 11, color: b.active ? "#2e7d32" : "#aaa", fontWeight: 600 }}>{b.active ? "● Live" : "○ Off"}</span>
+              <button onClick={() => onToggle(b.id, !b.active)}
+                style={{ padding: "5px 12px", background: b.active ? "#ffebee" : "#e8f5e9", color: b.active ? "#c62828" : "#2e7d32", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
+                {b.active ? "Turn Off" : "Turn On"}
+              </button>
+              <button onClick={() => { if (window.confirm("Delete this banner?")) onDelete(b.id); }}
+                style={{ padding: "5px 10px", background: "#fff0f0", color: "#c62828", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>🗑</button>
             </div>
           </div>
         ))}
+        {banners.length === 0 && (
+          <div style={{ textAlign: "center", padding: "40px 20px", color: "#aaa", fontSize: 14 }}>
+            No banners yet. Add one above.
+          </div>
+        )}
       </div>
     </div>
   );
