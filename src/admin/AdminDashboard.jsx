@@ -5,7 +5,7 @@ import AdminLoginPage from "./AdminLoginPage";
 import {
   subscribeOrders, updateOrderStatus,
   subscribeProducts, addProduct, updateProduct, deleteProduct, seedProductsIfEmpty,
-  getCustomers, getBanners, toggleBanner, seedBannersIfEmpty, addBanner, deleteBanner,
+  getCustomers, getBanners, subscribeBanners, toggleBanner, seedBannersIfEmpty, addBanner, deleteBanner,
   subscribeBrands, addBrand, updateBrand, deleteBrand, seedBrandsIfEmpty,
 } from "../services/firestore";
 import { allProducts } from "../data/products";
@@ -872,8 +872,8 @@ function CustomersView({ customers, orders }) {
   );
 }
 
-function BannersView({ banners, onToggle, onAdd, onDelete }) {
-  const emptyForm = { title: "", type: "Offer", discountText: "", bgColor: "#fff8e1", link: "", image: "" };
+function BannersView({ banners, brands, onToggle, onAdd, onDelete }) {
+  const emptyForm = { title: "", type: "Offer", discountText: "", discountPercent: "", applyTo: "all", bgColor: "#fff8e1", link: "", image: "" };
   const [form, setForm] = useState(emptyForm);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -927,9 +927,40 @@ function BannersView({ banners, onToggle, onAdd, onDelete }) {
               </select></div>
           </div>
 
-          {/* Row 2: Discount text + BG color */}
+          {/* Row 2: Discount % + Applies to */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={lbl}>Discount % (affects product prices)</label>
+              <input style={inp} type="number" min="0" max="90" value={form.discountPercent}
+                onChange={e => setForm(f => ({ ...f, discountPercent: Number(e.target.value) || "" }))}
+                placeholder="e.g. 20 for 20% off" />
+            </div>
+            <div>
+              <label style={lbl}>Applies To</label>
+              <select style={inp} value={form.applyTo} onChange={e => setForm(f => ({ ...f, applyTo: e.target.value }))}>
+                <option value="all">🛒 All Products</option>
+                <optgroup label="── By Category ──">
+                  <option value="basmati">Basmati Rice</option>
+                  <option value="non-basmati">Non-Basmati Rice</option>
+                  <option value="millets">Millets</option>
+                </optgroup>
+                {brands.filter(b => b.active !== false).length > 0 && (
+                  <optgroup label="── By Brand ──">
+                    {brands
+                      .filter(b => b.active !== false)
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map(b => (
+                        <option key={b.id} value={b.slug}>{b.name}</option>
+                      ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+          </div>
+
+          {/* Row 3: Discount text label + BG color */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, marginBottom: 12, alignItems: "end" }}>
-            <div><label style={lbl}>Discount Text (shown large)</label>
+            <div><label style={lbl}>Discount Label (shown on badge, e.g. "20% OFF")</label>
               <input style={inp} value={form.discountText} onChange={e => setForm(f => ({ ...f, discountText: e.target.value }))} placeholder="e.g. 20% OFF" /></div>
             <div><label style={lbl}>Card BG Color</label>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -940,7 +971,7 @@ function BannersView({ banners, onToggle, onAdd, onDelete }) {
             </div>
           </div>
 
-          {/* Row 3: Link path */}
+          {/* Row 4: Link path */}
           <div style={{ marginBottom: 12 }}>
             <label style={lbl}>Shop Link (optional)</label>
             <input style={inp} value={form.link} onChange={e => setForm(f => ({ ...f, link: e.target.value }))} placeholder="e.g. /search or /category/basmati" />
@@ -994,7 +1025,17 @@ function BannersView({ banners, onToggle, onAdd, onDelete }) {
               <div style={{ fontWeight: 700, fontSize: 13 }}>{b.title}</div>
               <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "#f0ece8", color: "#3b1f0e", fontWeight: 600 }}>{b.type}</span>
-                {b.discountText && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "#fff3cd", color: "#856404", fontWeight: 700 }}>{b.discountText}</span>}
+                {b.discountPercent > 0 && (
+                  <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "#ffebee", color: "#c62828", fontWeight: 800 }}>
+                    {b.discountPercent}% OFF ·{" "}
+                    {b.applyTo === "all"
+                      ? "All products"
+                      : ["basmati","non-basmati","millets"].includes(b.applyTo)
+                        ? b.applyTo
+                        : (brands.find(br => br.slug === b.applyTo)?.name || b.applyTo)}
+                  </span>
+                )}
+                {b.discountText && !b.discountPercent && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "#fff3cd", color: "#856404", fontWeight: 700 }}>{b.discountText}</span>}
                 {b.image && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "#e8f5e9", color: "#2e7d32", fontWeight: 600 }}>🖼 Has image</span>}
               </div>
             </div>
@@ -1045,12 +1086,8 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!user) return;
-    // Load customers + banners in parallel immediately
+    // Load customers immediately
     getCustomers().then(setCustomers).catch(() => {});
-    getBanners().then(async b => {
-      if (b.length === 0) { await seedBannersIfEmpty(); getBanners().then(setBanners); }
-      else setBanners(b);
-    }).catch(() => {});
     // Subscribe to real-time orders
     const unsub1 = subscribeOrders(setOrders);
     // Subscribe to products — seed only if empty
@@ -1070,7 +1107,15 @@ export default function AdminDashboard() {
         setBrands(bs);
       }
     });
-    return () => { unsub1(); unsub2(); unsub3(); };
+    // Subscribe to banners — seed defaults if empty
+    const unsub4 = subscribeBanners(async bs => {
+      if (bs.length === 0) {
+        await seedBannersIfEmpty();
+      } else {
+        setBanners(bs);
+      }
+    });
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
   }, [user]);
 
   // Safety timeout — if still loading after 4s, stop spinner
@@ -1090,7 +1135,7 @@ export default function AdminDashboard() {
       case "products":  return <ProductsView products={products} brands={brands} onAdd={addProduct} onDelete={deleteProduct} onUpdate={updateProduct} />;
       case "brands":    return <BrandsView brands={brands} onAdd={addBrand} onUpdate={updateBrand} onDelete={deleteBrand} />;
       case "customers": return <CustomersView customers={customers} orders={orders} />;
-      case "banners":   return <BannersView banners={banners} onToggle={toggleBanner} onAdd={addBanner} onDelete={deleteBanner} />;
+      case "banners":   return <BannersView banners={banners} brands={brands} onToggle={toggleBanner} onAdd={addBanner} onDelete={deleteBanner} />;
       default: return null;
     }
   };
