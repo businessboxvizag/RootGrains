@@ -48,6 +48,7 @@ export function AdminAuthProvider({ children }) {
         user,
         loading,
         error,
+        setError,
         login,
         logout,
         isBBAdmin,

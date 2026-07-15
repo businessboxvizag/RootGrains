@@ -9,6 +9,43 @@ import { useAuth } from "../auth/AuthContext";
 // ── Replace with your Razorpay Key ID from razorpay.com/dashboard → API Keys ──
 // Use rzp_test_... for testing, rzp_live_... for production
 const RAZORPAY_KEY_ID = "rzp_test_YOUR_KEY_HERE";
+const RAZORPAY_CONFIGURED = RAZORPAY_KEY_ID !== "rzp_test_YOUR_KEY_HERE";
+
+// ── Success chime (C5 → E5 → G5 arpeggio, no audio file needed) ──────────────
+function playSuccessChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + i * 0.18;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.28, t + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+      osc.start(t);
+      osc.stop(t + 0.6);
+    });
+  } catch {}
+}
+
+// ── Browser push notification ────────────────────────────────────────────────
+async function showOrderNotification(orderId) {
+  if (!("Notification" in window)) return;
+  let perm = Notification.permission;
+  if (perm === "default") perm = await Notification.requestPermission();
+  if (perm !== "granted") return;
+  new Notification("Order Placed! 🎉", {
+    body: `Your Root Grains order #${orderId.slice(-8).toUpperCase()} is confirmed.`,
+    icon: "/logo.png",
+    badge: "/logo.png",
+    tag: "order-placed",
+  });
+}
 
 function loadRazorpayScript() {
   return new Promise((resolve) => {
@@ -186,6 +223,8 @@ export default function CheckoutPage() {
             paymentId: response.razorpay_payment_id,
             paymentStatus: "paid",
           });
+          playSuccessChime();
+          showOrderNotification(orderId);
           setPaidOnline(true);
           setSuccessOrderId(orderId);
           setTimeout(() => {
@@ -230,6 +269,8 @@ export default function CheckoutPage() {
     // COD flow
     try {
       const orderId = await finaliseOrder({ paymentStatus: "pending" });
+      playSuccessChime();
+      showOrderNotification(orderId);
       setSuccessOrderId(orderId);
       setTimeout(() => {
         navigate(`/order-tracking/${orderId}`, {
@@ -337,12 +378,12 @@ export default function CheckoutPage() {
           </button>
 
           {/* Online Payment */}
-          <button onClick={() => setPayment("online")}
-            style={{ padding: "14px", border: `2px solid ${payment === "online" ? "var(--brown-dark)" : "var(--border)"}`, borderRadius: "var(--radius-md)", background: payment === "online" ? "#f5ede4" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, textAlign: "left" }}>
+          <button onClick={() => RAZORPAY_CONFIGURED && setPayment("online")}
+            style={{ padding: "14px", border: `2px solid ${payment === "online" ? "var(--brown-dark)" : "var(--border)"}`, borderRadius: "var(--radius-md)", background: payment === "online" ? "#f5ede4" : RAZORPAY_CONFIGURED ? "#fff" : "#f9f9f9", cursor: RAZORPAY_CONFIGURED ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: 12, textAlign: "left", opacity: RAZORPAY_CONFIGURED ? 1 : 0.5 }}>
             <span style={{ fontSize: 22 }}>📱</span>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: payment === "online" ? "var(--brown-dark)" : "var(--text)" }}>Online Payment</div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>UPI · PhonePe · GPay · Cards · Netbanking</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{RAZORPAY_CONFIGURED ? "UPI · PhonePe · GPay · Cards · Netbanking" : "Coming soon"}</div>
             </div>
             {payment === "online" && <span style={{ marginLeft: "auto", color: "#2e7d32", fontWeight: 800, fontSize: 16 }}>✓</span>}
           </button>

@@ -2,33 +2,70 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Products — anyone can read, only admins can write
+    // ── Admin check using email claim in the Firebase token ──────────────────
+    // Admin emails are verified server-side (token.email cannot be spoofed).
+    // Phone-only users have no token.email, so they can never match.
+    function isAdmin() {
+      return request.auth != null
+          && request.auth.token.email != null
+          && request.auth.token.email in [
+               "butchiricetradinggwk@gmail.com",
+               "stanleyvanthala@gmail.com",
+               "businessboxvizag@gmail.com"
+             ];
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // ── Products — public read, admin write only ──────────────────────────────
     match /products/{id} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
-    // Orders — anyone can create (guest checkout allowed), admins can read all, users can read their own
-    match /orders/{id} {
-      allow create: if true;
-      allow read, update: if request.auth != null;
-    }
-
-    // Banners — anyone can read, only admins can write
+    // ── Banners — public read, admin write only ───────────────────────────────
     match /banners/{id} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
-    // Customers — users can read/write their own, admins can read all
+    // ── Brands — public read, admin write only ────────────────────────────────
+    match /brands/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Orders ────────────────────────────────────────────────────────────────
+    // - Signed-in customers can create orders (phone/email OTP users)
+    // - Customer can only read their own order
+    // - Admin can read, update (status changes), delete any order
+    match /orders/{id} {
+      allow create: if signedIn();
+      allow read:   if signedIn() && (request.auth.uid == resource.data.customerId || isAdmin());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Customers — own profile only; admin can read all ─────────────────────
     match /customers/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read: if request.auth != null;
+      allow read, write: if isOwner(userId);
+      allow read:        if isAdmin();
     }
 
-    // Analytics — only admins
+    // ── Carts — owner only ────────────────────────────────────────────────────
+    match /carts/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // ── Analytics — admin only ────────────────────────────────────────────────
     match /analytics/{id} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
     }
   }
 }
