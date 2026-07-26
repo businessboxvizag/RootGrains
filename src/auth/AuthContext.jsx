@@ -10,6 +10,7 @@ import {
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 import { auth } from "../firebase";
 import { saveCustomer } from "../services/firestore";
@@ -102,11 +103,19 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => signInWithEmailAndPassword(auth, email, password);
   const logout = async () => signOut(auth);
 
+  // ── Password reset email ───────────────────────────────────────────────────
+  const resetPassword = async (email) => {
+    await sendPasswordResetEmail(auth, email, {
+      url: appBaseUrl() + "/#/login",
+      handleCodeInApp: false,
+    });
+  };
+
   return (
     <AuthContext.Provider value={{
       user, loading,
       sendPhoneOTP, verifyPhoneOTP,
-      sendEmailLink,
+      sendEmailLink, resetPassword,
       signup, login, logout,
     }}>
       {children}

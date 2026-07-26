@@ -16,11 +16,11 @@ const inp = {
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { sendPhoneOTP, verifyPhoneOTP, sendEmailLink } = useAuth();
+  const { sendPhoneOTP, verifyPhoneOTP, sendEmailLink, resetPassword } = useAuth();
   const from = location.state?.from || "/profile";
 
   const [method, setMethod] = useState("phone"); // "phone" | "email"
-  const [step, setStep] = useState("input");     // "input" | "otp" | "sent" | "name"
+  const [step, setStep] = useState("input");     // "input" | "otp" | "sent" | "name" | "reset-sent"
 
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -130,6 +130,24 @@ export default function LoginPage() {
     setLoading(false);
   };
 
+  // ── Forgot password ────────────────────────────────────────────────────────
+  const handleForgotPassword = async () => {
+    setError("");
+    if (!email.includes("@") || !email.includes(".")) { setError("Enter your email address first."); return; }
+    setLoading(true);
+    try {
+      await resetPassword(email);
+      setStep("reset-sent");
+    } catch (err) {
+      setError(
+        err.code === "auth/user-not-found" ? "No account found with this email." :
+        err.code === "auth/too-many-requests" ? "Too many attempts. Try again later." :
+        "Could not send reset email. Try again."
+      );
+    }
+    setLoading(false);
+  };
+
   const handleResend = async () => {
     if (resendTimer > 0) return;
     setOtp(["", "", "", "", "", ""]); setError("");
@@ -171,6 +189,27 @@ export default function LoginPage() {
         <button onClick={handleSaveName} disabled={loading}
           style={{ width: "100%", padding: 14, background: "var(--brown-dark)", color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
           {loading ? "Saving..." : "Continue →"}
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── Password reset email sent ──────────────────────────────────────────────
+  if (step === "reset-sent") return (
+    <div style={{ fontFamily: "var(--font-body)", background: "var(--cream)", minHeight: "100vh" }}>
+      <Header />
+      <Branding subtitle="Check your email to reset password" />
+      <div style={{ padding: "40px 24px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+        <div style={{ fontSize: 56 }}>🔑</div>
+        <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--brown-dark)" }}>Reset link sent!</h2>
+        <p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7, maxWidth: 280 }}>
+          We sent a password reset link to<br />
+          <strong style={{ color: "var(--brown-dark)" }}>{email}</strong>
+        </p>
+        <p style={{ fontSize: 12, color: "#bbb" }}>Tap the link in the email to set a new password.<br />Also check your spam folder.</p>
+        <button onClick={() => { setStep("input"); setError(""); }}
+          style={{ marginTop: 8, padding: "10px 24px", background: "var(--cream-2)", color: "var(--brown-dark)", border: "1.5px solid var(--border)", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          ← Back to Sign In
         </button>
       </div>
     </div>
@@ -299,6 +338,13 @@ export default function LoginPage() {
               onKeyDown={e => e.key === "Enter" && handleSendEmailLink()}
               placeholder="you@example.com" autoFocus />
             <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>We'll email you a one-tap sign-in link — no password</p>
+            <p style={{ fontSize: 12, marginTop: 10, textAlign: "right" }}>
+              <span
+                onClick={handleForgotPassword}
+                style={{ color: "var(--brown-dark)", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
+                Forgot password?
+              </span>
+            </p>
           </div>
         )}
 
