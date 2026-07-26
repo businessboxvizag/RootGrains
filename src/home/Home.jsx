@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./Home.css";
 import Header from "./Header";
 import Hero from "./Hero";
@@ -6,7 +6,9 @@ import Brands from "./Brands";
 import Categories from "./Categories";
 import Products from "./Products";
 import BottomNav from "./BottomNav";
+import OffersSection from "./OffersSection";
 import { useLang } from "../LanguageContext";
+import { getBanners } from "../services/firestore";
 
 const VIZAG_PINCODES = new Set([
   516003, 517586, 524312,
@@ -108,6 +110,21 @@ function PincodeModal({ onClose }) {
 function Home() {
   const { t } = useLang();
   const [showPincodeModal, setShowPincodeModal] = useState(false);
+  const [announcements, setAnnouncements] = useState([]);
+
+  // Load live Announcement banners for the notice bar
+  useEffect(() => {
+    getBanners()
+      .then(all => setAnnouncements(all.filter(b => b.active && b.type === "Announcement")))
+      .catch(() => {});
+  }, []);
+
+  // Build the notice bar scroll content: caution notice + any live announcements
+  const noticeItems = [
+    t.notice,
+    ...announcements.map(a => a.title),
+  ];
+  const scrollText = noticeItems.join("     ·     ");
 
   return (
     <div className="mobile">
@@ -117,8 +134,8 @@ function Home() {
       {/* Notice bar */}
       <div className="notice-bar">
         <div className="notice-scroll">
-          {t.notice}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-          {t.notice}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          {scrollText}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          {scrollText}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
         </div>
       </div>
       {/* Check here button below, right-aligned */}
@@ -131,9 +148,54 @@ function Home() {
         </button>
       </div>
 
+      {/* Live offers & promotions from admin panel */}
+      <OffersSection />
+
       <Brands />
       <Categories />
       <Products />
+
+      {/* Footer */}
+      <div style={{ background: "#3b1f0e", color: "#fff", padding: "28px 20px 24px", marginBottom: 64 }}>
+        {/* Logo + name */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+          <img src="/logo.png" alt="Root Grains" style={{ width: 36, height: 36, objectFit: "contain", borderRadius: 8 }} />
+          <span style={{ fontSize: 16, fontWeight: 800, fontFamily: "var(--font-display)" }}>Root Grains</span>
+        </div>
+
+        {/* Address */}
+        <div style={{ marginBottom: 14 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Our Store</p>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", lineHeight: 1.7 }}>
+            Ground Floor, 13/24/61, Raythu Bazar Road,<br />
+            Near Petrol Bunk, New Gajuwaka,<br />
+            Visakhapatnam, Andhra Pradesh
+          </p>
+        </div>
+
+        {/* Phone */}
+        <div style={{ marginBottom: 20 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Contact</p>
+          <a href="tel:+916302876180" style={{ fontSize: 15, fontWeight: 700, color: "#fff", textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
+            📞 +91 63028 76180
+          </a>
+        </div>
+
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16, textAlign: "center" }}>
+          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+            Powered by{" "}
+            <a
+              href="https://www.businessbox.org.in/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "rgba(255,255,255,0.75)", fontWeight: 700, textDecoration: "none" }}
+            >
+              BusinessBox
+            </a>
+          </p>
+        </div>
+      </div>
+
       <BottomNav />
 
       {showPincodeModal && <PincodeModal onClose={() => setShowPincodeModal(false)} />}
