@@ -1,6 +1,6 @@
 import {
   collection, doc, addDoc, updateDoc, getDocs, getDoc,
-  query, orderBy, serverTimestamp, setDoc, increment, onSnapshot, deleteDoc
+  query, orderBy, where, serverTimestamp, setDoc, increment, onSnapshot, deleteDoc
 } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -80,6 +80,22 @@ export async function getCustomers() {
 export async function getCustomer(uid) {
   const snap = await getDoc(doc(db, "customers", uid));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+// Look up a customer by phone number (for account recognition across auth methods)
+export async function getCustomerByPhone(phone) {
+  const snap = await getDocs(query(collection(db, "customers"), where("phone", "==", phone)));
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, ...d.data() };
+}
+
+// Look up a customer by email (for account recognition across auth methods)
+export async function getCustomerByEmail(email) {
+  const snap = await getDocs(query(collection(db, "customers"), where("email", "==", email)));
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, ...d.data() };
 }
 
 // ─── ANALYTICS ───────────────────────────────────────────────────────────────
@@ -185,6 +201,21 @@ export async function getUserOrders(userId) {
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .filter(o => o.customerId === userId);
+}
+
+// ─── SARDHA INTEGRATION ───────────────────────────────────────────────────────
+// Kill switch + config lives in settings/sardha (writable only by BB superadmin)
+export async function getSardhaSettings() {
+  const snap = await getDoc(doc(db, "settings", "sardha"));
+  return snap.exists() ? snap.data() : null;
+}
+
+// Save Saardha delivery info back to an order after successful dispatch
+export async function updateOrderSardha(orderId, sardhaData) {
+  await updateDoc(doc(db, "orders", orderId), {
+    ...sardhaData,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 // ─── GET SINGLE PRODUCT BY ID ────────────────────────────────────────────────

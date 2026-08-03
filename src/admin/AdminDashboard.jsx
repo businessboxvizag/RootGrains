@@ -9,6 +9,7 @@ import {
   subscribeBrands, addBrand, updateBrand, deleteBrand, seedBrandsIfEmpty,
 } from "../services/firestore";
 import { allProducts } from "../data/products";
+import SardhaView from "./SardhaView";
 
 const statusColors = {
   pending:    { bg: "#fff8e1", color: "#f57f17", label: "Pending" },
@@ -30,6 +31,7 @@ function Sidebar({ active, setActive, onLogout }) {
     { key: "brands",    icon: "🏷️",  label: "Brands" },
     { key: "customers", icon: "👥", label: "Customers" },
     { key: "banners",   icon: "🖼️",  label: "Banners" },
+    { key: "sardha",    icon: "🛵",  label: "Sardha Delivery" },
   ];
   return (
     <aside style={{ width: 200, minHeight: "100vh", background: "#3b1f0e", color: "#fff", display: "flex", flexDirection: "column", padding: "0 0 24px 0", flexShrink: 0 }}>
@@ -1157,6 +1159,7 @@ export default function AdminDashboard() {
       case "brands":    return <BrandsView brands={brands} onAdd={addBrand} onUpdate={updateBrand} onDelete={deleteBrand} />;
       case "customers": return <CustomersView customers={customers} orders={orders} />;
       case "banners":   return <BannersView banners={banners} brands={brands} onToggle={toggleBanner} onAdd={addBanner} onDelete={deleteBanner} />;
+      case "sardha":    return <SardhaView orders={orders} />;
       default: return null;
     }
   };
