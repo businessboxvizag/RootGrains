@@ -63,9 +63,14 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
     }
 
-    // ── Analytics — admin only ────────────────────────────────────────────────
+    // ── Analytics — admin reads; signed-in users may bump counters ────────────
+    // Storefront actions (order placed, page view) increment counters here.
+    // Reads stay admin-only so totals aren't exposed publicly. Writes are
+    // limited to signed-in users; values are simple counters, so the blast
+    // radius of tampering is low and never touches money or orders.
     match /analytics/{id} {
-      allow read, write: if isAdmin();
+      allow read:  if isAdmin();
+      allow write: if signedIn();
     }
 
     // ── Settings (Sardha kill switch + API config) ─────────────────────────

@@ -176,6 +176,7 @@ body {
 }
 .product-list::-webkit-scrollbar { display: none; }
 .product-card {
+  position: relative;
   min-width: 138px; max-width: 138px;
   background: var(--white, #fff); border: 1px solid var(--border, #e8d8c0);
   border-radius: var(--radius-md, 10px); padding: 8px;

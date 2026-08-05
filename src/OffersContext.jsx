@@ -19,8 +19,6 @@ export function OffersProvider({ children }) {
     return unsub;
   }, []);
 
-  const CATEGORIES = ["all", "basmati", "non-basmati", "millets"];
-
   // Returns the best applicable discount for a product, or null.
   // Supports two filter modes:
   //   New: applyToCategory + applyToBrand (both must match — intersection)

@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { useLang } from "../LanguageContext";
 import { useCart } from "../CartContext";
 import { useProducts } from "../ProductsContext";
+import { useOffers } from "../OffersContext";
 
 function ProductCard({ p, t }) {
   const navigate = useNavigate();
   const { cart, addToCart, removeFromCart } = useCart();
+  const { getDiscount, applyDiscount } = useOffers();
 
   const variants = p.variants?.length
     ? p.variants
@@ -16,18 +18,28 @@ function ProductCard({ p, t }) {
   const selected = variants[selectedIdx];
   const productName = p.name || t[p.nameKey] || p.nameKey;
 
+  const discount = getDiscount(p);
+  const finalPrice = discount ? applyDiscount(selected.price, p) : selected.price;
+
   const cartKey = `${p.id}_${selected.weight}`;
   const cartItem = cart.find(i => i.id === cartKey);
   const qty = cartItem?.qty || 0;
 
   const handleAdd = (e) => {
     e.stopPropagation();
-    addToCart({ ...p, id: cartKey, name: productName, weight: selected.weight, price: selected.price, perKgPrice: selected.perKgPrice, perKg: `₹${selected.perKgPrice}/kg` });
+    addToCart({ ...p, id: cartKey, name: productName, weight: selected.weight, price: finalPrice, originalPrice: selected.price, perKgPrice: selected.perKgPrice, perKg: `₹${selected.perKgPrice}/kg` });
   };
   const handleRemove = (e) => { e.stopPropagation(); removeFromCart(cartKey); };
 
   return (
     <div className="product-card" onClick={() => navigate(`/product/${p.id}`)}>
+      {/* Discount badge */}
+      {discount && (
+        <div style={{ position: "absolute", top: 6, left: 6, background: "#e53935", color: "#fff", fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 6, zIndex: 2, letterSpacing: 0.3 }}>
+          {discount.label}
+        </div>
+      )}
+
       {/* Add / Qty control */}
       <div className="card-top">
         {qty === 0 ? (
@@ -59,7 +71,15 @@ function ProductCard({ p, t }) {
       </div>
 
       <h4>{productName}</h4>
-      <p className="price">₹{selected.price}</p>
+
+      {discount ? (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+          <p className="price" style={{ color: "#e53935", margin: 0 }}>₹{finalPrice}</p>
+          <p style={{ fontSize: 10, color: "#aaa", textDecoration: "line-through", margin: 0 }}>₹{selected.price}</p>
+        </div>
+      ) : (
+        <p className="price">₹{selected.price}</p>
+      )}
       <p className="per-kg">₹{selected.perKgPrice}/kg</p>
     </div>
   );

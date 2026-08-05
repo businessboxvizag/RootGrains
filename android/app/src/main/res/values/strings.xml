@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Root Grains</string>
+    <string name="title_activity_main">Root Grains</string>
+    <string name="package_name">com.rootgrains.app</string>
+    <string name="custom_url_scheme">com.rootgrains.app</string>
+</resources>

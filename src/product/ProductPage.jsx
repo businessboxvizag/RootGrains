@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import "../home/Home.css";
 import { useLang } from "../LanguageContext";
 import { useCart } from "../CartContext";
+import { useOffers } from "../OffersContext";
 import { getProductById } from "../services/firestore";
 
 function ProductPage() {
@@ -10,6 +11,7 @@ function ProductPage() {
   const navigate = useNavigate();
   const { t } = useLang();
   const { cart, addToCart, removeFromCart, totalItems } = useCart();
+  const { getDiscount, applyDiscount } = useOffers();
 
   const [product, setProduct] = useState(null);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
@@ -55,12 +57,16 @@ function ProductPage() {
     : product.category === "millets" ? "Millet"
     : "Non-Basmati Rice";
 
+  const discount = getDiscount(product);
+  const finalPrice = discount ? applyDiscount(selected.price, product) : selected.price;
+
   const handleAdd = () => addToCart({
     ...product,
     id: cartKey,
     name: productName,
     weight: selected.weight,
-    price: selected.price,
+    price: finalPrice,
+    originalPrice: selected.price,
     perKgPrice: selected.perKgPrice,
     perKg: `₹${selected.perKgPrice}/kg`,
   });
@@ -117,8 +123,14 @@ function ProductPage() {
         </div>
 
         {/* Price */}
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 16 }}>
-          <span style={{ fontSize: 28, fontWeight: 800, color: "#e65100" }}>₹{selected.price}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 28, fontWeight: 800, color: discount ? "#e53935" : "#e65100" }}>₹{finalPrice}</span>
+          {discount && (
+            <>
+              <span style={{ fontSize: 16, color: "#aaa", textDecoration: "line-through" }}>₹{selected.price}</span>
+              <span style={{ background: "#e53935", color: "#fff", fontSize: 11, fontWeight: 800, padding: "3px 8px", borderRadius: 6 }}>{discount.label}</span>
+            </>
+          )}
           {selected.perKgPrice && <span style={{ fontSize: 13, color: "#aaa" }}>₹{selected.perKgPrice}/kg</span>}
         </div>
 
@@ -161,12 +173,12 @@ function ProductPage() {
       <div style={{ position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", width: "calc(100% - 32px)", maxWidth: 448, zIndex: 100, display: "flex", flexDirection: "column", gap: "8px", pointerEvents: "none" }}>
         {qty === 0 ? (
           <button onClick={handleAdd} style={{ pointerEvents: "auto", width: "100%", padding: "14px", background: "#3b1f0e", color: "#fff", border: "none", borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 18px rgba(61,31,10,0.35)" }}>
-            Add to Cart — ₹{selected.price}
+            Add to Cart — ₹{finalPrice}
           </button>
         ) : (
           <>
             <div style={{ pointerEvents: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#3b1f0e", borderRadius: 14, padding: "8px 8px 8px 16px", boxShadow: "0 4px 18px rgba(61,31,10,0.35)" }}>
-              <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>₹{selected.price * qty} · {qty} in cart</span>
+              <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>₹{finalPrice * qty} · {qty} in cart</span>
               <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
                 <button onClick={handleRemove} style={{ width: 36, height: 36, borderRadius: 8, border: "none", background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
                 <span style={{ color: "#fff", fontWeight: 800, fontSize: 16, minWidth: 28, textAlign: "center" }}>{qty}</span>

@@ -11,6 +11,7 @@ export async function createOrder(orderData) {
     status: "pending",
     createdAt: serverTimestamp(),
   });
+  // Analytics are best-effort — a counter failure must never fail the order.
   await incrementAnalytic("totalOrders");
   await incrementAnalytic("totalRevenue", orderData.total);
   return ref.id;
@@ -100,8 +101,13 @@ export async function getCustomerByEmail(email) {
 
 // ─── ANALYTICS ───────────────────────────────────────────────────────────────
 export async function incrementAnalytic(field, amount = 1) {
-  const ref = doc(db, "analytics", "global");
-  await setDoc(ref, { [field]: increment(amount) }, { merge: true });
+  try {
+    const ref = doc(db, "analytics", "global");
+    await setDoc(ref, { [field]: increment(amount) }, { merge: true });
+  } catch (e) {
+    // Best-effort counter — never let analytics break a customer action.
+    console.warn("incrementAnalytic failed:", field, e?.code || e);
+  }
 }
 
 export async function getAnalytics() {
@@ -156,9 +162,14 @@ export async function seedBannersIfEmpty() {
 
 // ─── PAGE VIEWS (used by CheckoutPage and other storefront pages) ─────────────
 export async function logPageView(page) {
-  const today = new Date().toISOString().split("T")[0];
-  const ref = doc(db, "analytics", `pageviews_${today}`);
-  await setDoc(ref, { [page]: increment(1), date: today }, { merge: true });
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const ref = doc(db, "analytics", `pageviews_${today}`);
+    await setDoc(ref, { [page]: increment(1), date: today }, { merge: true });
+  } catch (e) {
+    // Best-effort page view — never let analytics break page rendering.
+    console.warn("logPageView failed:", page, e?.code || e);
+  }
 }
 
 // ─── USER CART ───────────────────────────────────────────────────────────────

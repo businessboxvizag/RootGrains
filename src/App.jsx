@@ -18,6 +18,7 @@ import { AdminAuthProvider } from "./admin/AdminAuthContext";
 import { ProductsProvider } from "./ProductsContext";
 import { AuthProvider } from "./auth/AuthContext";
 import { CartProvider } from "./CartContext";
+import { OffersProvider } from "./OffersContext";
 import SignupPage from "./auth/SignupPage";
 import { useLang } from "./LanguageContext";
 
@@ -53,12 +54,16 @@ function App() {
       <AdminAuthProvider>
         <AuthProvider>
           <CartProvider>
-            <ProductsProvider>
-              <AppRoutes />
-            </ProductsProvider>
+            <OffersProvider>
+              <ProductsProvider>
+                <AppRoutes />
+              </ProductsProvider>
+            </OffersProvider>
           </CartProvider>
         </AuthProvider>
       </AdminAuthProvider>
+      {/* Persistent invisible reCAPTCHA anchor — must stay in DOM at all times */}
+      <div id="rg-recaptcha" style={{ position: "fixed", bottom: 0, left: 0, zIndex: -1 }} />
     </HashRouter>
   );
 }

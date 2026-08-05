@@ -32,7 +32,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [resendTimer, setResendTimer] = useState(0);
 
-  const recaptchaRef = useRef(null);
   const otpRefs = [useRef(), useRef(), useRef(), useRef(), useRef(), useRef()];
 
   // ── Resend countdown ───────────────────────────────────────────────────────
@@ -61,7 +60,7 @@ export default function LoginPage() {
     if (!phone.match(/^[6-9]\d{9}$/)) { setError("Enter a valid 10-digit mobile number."); return; }
     setLoading(true);
     try {
-      const result = await sendPhoneOTP(phone, recaptchaRef.current);
+      const result = await sendPhoneOTP(phone);
       setConfirmationResult(result);
       setStep("otp");
       startResendTimer();
@@ -99,8 +98,8 @@ export default function LoginPage() {
     if (otpCode.length !== 6) { setError("Enter all 6 digits."); return; }
     setLoading(true);
     try {
-      const u = await verifyPhoneOTP(confirmationResult, otpCode);
-      if (!u.displayName) { setStep("name"); }
+      const { isNew } = await verifyPhoneOTP(confirmationResult, otpCode);
+      if (isNew) { setStep("name"); }
       else { navigate(from); }
     } catch (err) {
       setError(
@@ -285,7 +284,6 @@ export default function LoginPage() {
           }
         </p>
       </div>
-      <div ref={recaptchaRef} />
     </div>
   );
 
@@ -364,8 +362,6 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* Invisible reCAPTCHA — required by Firebase Phone Auth */}
-      <div ref={recaptchaRef} />
     </div>
   );
 }

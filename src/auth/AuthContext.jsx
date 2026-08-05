@@ -13,14 +13,26 @@ import {
   sendPasswordResetEmail,
 } from "firebase/auth";
 import { auth } from "../firebase";
-import { saveCustomer } from "../services/firestore";
+import { saveCustomer, getCustomer, getCustomerByPhone, getCustomerByEmail } from "../services/firestore";
 
 const AuthContext = createContext(null);
-
 const EMAIL_LINK_KEY = "rg_email_for_signin";
 
 function appBaseUrl() {
   return window.location.origin;
+}
+
+// Stable RecaptchaVerifier bound to the persistent #rg-recaptcha div in App.jsx
+function getRecaptchaVerifier() {
+  if (window._rgRecaptcha) return window._rgRecaptcha;
+  window._rgRecaptcha = new RecaptchaVerifier(auth, "rg-recaptcha", {
+    size: "invisible",
+    callback: () => {},
+    "expired-callback": () => {
+      window._rgRecaptcha = null;
+    },
+  });
+  return window._rgRecaptcha;
 }
 
 export function AuthProvider({ children }) {
@@ -36,12 +48,15 @@ export function AuthProvider({ children }) {
           .then(async (result) => {
             localStorage.removeItem(EMAIL_LINK_KEY);
             if (result.user) {
-              await saveCustomer(result.user.uid, {
-                email: savedEmail,
-                name: result.user.displayName || "",
-                phone: "",
-                createdAt: new Date(),
-              });
+              // Check if this account already exists (by UID or email)
+              const byUid = await getCustomer(result.user.uid);
+              if (!byUid) {
+                const byEmail = await getCustomerByEmail(savedEmail);
+                await saveCustomer(result.user.uid, byEmail
+                  ? { ...byEmail }  // merge existing profile into new UID
+                  : { email: savedEmail, name: result.user.displayName || "", phone: "", createdAt: new Date() }
+                );
+              }
             }
           })
           .catch(() => {});
@@ -55,34 +70,49 @@ export function AuthProvider({ children }) {
     return unsub;
   }, []);
 
-  // ── Phone OTP (SMS) ────────────────────────────────────────────────────────
-  const sendPhoneOTP = async (phoneNumber, recaptchaContainerId) => {
+  // ── Phone OTP ─────────────────────────────────────────────────────────────
+  const sendPhoneOTP = async (phoneNumber) => {
+    // Reset verifier if it errored previously
     if (window._rgRecaptcha) {
       try { window._rgRecaptcha.clear(); } catch {}
       window._rgRecaptcha = null;
     }
-    const verifier = new RecaptchaVerifier(auth, recaptchaContainerId, {
-      size: "invisible",
-      callback: () => {},
-    });
-    window._rgRecaptcha = verifier;
+    const verifier = getRecaptchaVerifier();
     return await signInWithPhoneNumber(auth, "+91" + phoneNumber, verifier);
   };
 
   const verifyPhoneOTP = async (confirmationResult, code) => {
     const result = await confirmationResult.confirm(code);
-    if (result.user) {
-      await saveCustomer(result.user.uid, {
-        phone: result.user.phoneNumber || "",
-        name: result.user.displayName || "",
-        email: result.user.email || "",
-        createdAt: new Date(),
-      });
+    const phoneUser = result.user;
+    const phone = phoneUser.phoneNumber; // "+91XXXXXXXXXX"
+
+    // Check if this UID already has a complete profile
+    const byUid = await getCustomer(phoneUser.uid);
+    if (byUid && byUid.name) {
+      // Existing user — just refresh the record
+      await saveCustomer(phoneUser.uid, { phone, updatedAt: new Date() });
+      return { user: phoneUser, isNew: false };
     }
-    return result.user;
+
+    // Check if this phone belongs to an existing account (registered via email)
+    const byPhone = await getCustomerByPhone(phone);
+    if (byPhone) {
+      // Merge the existing profile into this phone-auth UID
+      await saveCustomer(phoneUser.uid, { ...byPhone, updatedAt: new Date() });
+      return { user: phoneUser, isNew: false };
+    }
+
+    // Brand new user
+    await saveCustomer(phoneUser.uid, {
+      phone,
+      name: "",
+      email: "",
+      createdAt: new Date(),
+    });
+    return { user: phoneUser, isNew: true };
   };
 
-  // ── Email magic link (passwordless) ───────────────────────────────────────
+  // ── Email magic link ───────────────────────────────────────────────────────
   const sendEmailLink = async (email) => {
     const actionCodeSettings = {
       url: appBaseUrl() + "/#/login",
@@ -90,6 +120,14 @@ export function AuthProvider({ children }) {
     };
     await sendSignInLinkToEmail(auth, email, actionCodeSettings);
     localStorage.setItem(EMAIL_LINK_KEY, email);
+  };
+
+  // ── Password reset ─────────────────────────────────────────────────────────
+  const resetPassword = async (email) => {
+    await sendPasswordResetEmail(auth, email, {
+      url: appBaseUrl() + "/#/login",
+      handleCodeInApp: false,
+    });
   };
 
   // ── Legacy email+password (kept for existing users) ───────────────────────
@@ -102,14 +140,6 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => signInWithEmailAndPassword(auth, email, password);
   const logout = async () => signOut(auth);
-
-  // ── Password reset email ───────────────────────────────────────────────────
-  const resetPassword = async (email) => {
-    await sendPasswordResetEmail(auth, email, {
-      url: appBaseUrl() + "/#/login",
-      handleCodeInApp: false,
-    });
-  };
 
   return (
     <AuthContext.Provider value={{
