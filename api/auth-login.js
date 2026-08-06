@@ -17,7 +17,10 @@ const LOCK_MS = 15 * 60 * 1000;
 function getDb() {
   if (!process.env.FIREBASE_SERVICE_ACCOUNT) return null;
   if (!admin.apps.length) {
-    admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
+    const creds = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    // Vercel often stores the private key with literal "\n" — restore real newlines.
+    if (creds.private_key) creds.private_key = creds.private_key.replace(/\\n/g, "\n");
+    admin.initializeApp({ credential: admin.credential.cert(creds) });
   }
   return admin.firestore();
 }
