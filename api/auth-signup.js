@@ -36,10 +36,11 @@ function getDb() {
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  const db = getDb();
-  if (!db) return res.status(503).json({ error: "Sign-up is not configured" });
 
   try {
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: "Sign-up is not configured (FIREBASE_SERVICE_ACCOUNT missing)" });
+
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     const name = String(body.name || "").trim();
     const email = String(body.email || "").trim();
