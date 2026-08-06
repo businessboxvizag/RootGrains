@@ -58,6 +58,14 @@ service cloud.firestore {
       allow read:        if isAdmin();
     }
 
+    // ── Credentials (MPIN hashes) — SERVER ONLY ──────────────────────────────
+    // Holds bcrypt MPIN hashes + lockout counters. The client must NEVER read or
+    // write these; only the backend (firebase-admin, which bypasses rules) touches
+    // them. Denying all access here is intentional and required for security.
+    match /credentials/{id} {
+      allow read, write: if false;
+    }
+
     // ── Carts — owner only ────────────────────────────────────────────────────
     match /carts/{uid} {
       allow read, write: if isOwner(uid);
