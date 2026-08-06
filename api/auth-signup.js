@@ -12,6 +12,7 @@
  * accepted tradeoff for this store (delivery is confirmed by call).
  */
 import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import bcrypt from "bcryptjs";
 
 function parseServiceAccount(raw) {
@@ -31,7 +32,9 @@ function getDb() {
   if (!admin.apps.length) {
     admin.initializeApp({ credential: admin.credential.cert(parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT)) });
   }
-  return admin.firestore();
+  // IMPORTANT: this project's data lives in a Firestore database NAMED "default"
+  // (not the unnamed "(default)"), so we must target it explicitly.
+  return getFirestore(admin.app(), "default");
 }
 
 export default async function handler(req, res) {

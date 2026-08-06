@@ -9,6 +9,7 @@
  * Requires env: FIREBASE_SERVICE_ACCOUNT.
  */
 import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import bcrypt from "bcryptjs";
 
 const MAX_ATTEMPTS = 5;
@@ -31,7 +32,8 @@ function getDb() {
   if (!admin.apps.length) {
     admin.initializeApp({ credential: admin.credential.cert(parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT)) });
   }
-  return admin.firestore();
+  // This project's data lives in a Firestore database NAMED "default".
+  return getFirestore(admin.app(), "default");
 }
 
 export default async function handler(req, res) {

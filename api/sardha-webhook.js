@@ -19,6 +19,7 @@
  * affects the rest of the site.
  */
 import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 
 // Map Saardha's granular delivery states onto Root Grains' order statuses.
 // Everything "in flight" shows as "dispatched" (Out for Delivery) to the customer.
@@ -41,7 +42,8 @@ function getDb() {
     if (creds.private_key) creds.private_key = creds.private_key.replace(/\\n/g, "\n");
     admin.initializeApp({ credential: admin.credential.cert(creds) });
   }
-  return admin.firestore();
+  // This project's data lives in a Firestore database NAMED "default".
+  return getFirestore(admin.app(), "default");
 }
 
 export default async function handler(req, res) {
