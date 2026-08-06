@@ -79,7 +79,12 @@ export default async function handler(req, res) {
     const token = await admin.auth().createCustomToken(uid);
     return res.status(200).json({ token });
   } catch (e) {
-    console.error("auth-signup:", e && e.message);
-    return res.status(500).json({ error: "Could not create your account. Please try again." });
+  console.error("FULL ERROR:", e);
+  console.error("STACK:", e?.stack);
+
+  return res.status(500).json({
+    error: e?.message || String(e),
+    code: e?.code || null,
+  });
   }
 }
