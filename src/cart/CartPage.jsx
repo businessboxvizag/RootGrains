@@ -64,13 +64,17 @@ function CartPage() {
               <span>₹{subtotal}</span>
             </div>
             <div className="cart-summary-row">
+              <span>GST (18%)</span>
+              <span>₹{Math.round(subtotal * 0.18)}</span>
+            </div>
+            <div className="cart-summary-row">
               <span>Delivery fee</span>
               <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>Calculated at checkout</span>
             </div>
             <div className="cart-summary-divider" />
             <div className="cart-summary-row total">
               <span>{t.toPay}</span>
-              <span>₹{subtotal}</span>
+              <span>₹{subtotal + Math.round(subtotal * 0.18)}</span>
             </div>
           </div>
 

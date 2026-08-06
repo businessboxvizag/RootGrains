@@ -6,10 +6,10 @@ import { useCart } from "../CartContext";
 import { createOrder, saveCustomer, logPageView, getUserAddresses } from "../services/firestore";
 import { useAuth } from "../auth/AuthContext";
 
-// ── Replace with your Razorpay Key ID from razorpay.com/dashboard → API Keys ──
-// Use rzp_test_... for testing, rzp_live_... for production
-const RAZORPAY_KEY_ID = "rzp_test_YOUR_KEY_HERE";
-const RAZORPAY_CONFIGURED = RAZORPAY_KEY_ID !== "rzp_test_YOUR_KEY_HERE";
+// Razorpay publishable Key ID comes from the build env (VITE_RAZORPAY_KEY_ID).
+// The key SECRET lives only on the server (api/razorpay-order.js + api/razorpay-verify.js).
+const RAZORPAY_KEY_ID = import.meta.env.VITE_RAZORPAY_KEY_ID || "";
+const RAZORPAY_CONFIGURED = RAZORPAY_KEY_ID.startsWith("rzp_");
 
 // ── Success chime (C5 → E5 → G5 arpeggio, no audio file needed) ──────────────
 function playSuccessChime() {
@@ -117,15 +117,45 @@ export default function CheckoutPage() {
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [mobile, setMobile] = useState("");
-  const [delivery, setDelivery] = useState("eco");
   const [payment, setPayment] = useState("cod");
   const [errors, setErrors] = useState({});
   const [placing, setPlacing] = useState(false);
   const [successOrderId, setSuccessOrderId] = useState(null);
   const [paidOnline, setPaidOnline] = useState(false);
+  const [deliveryFee, setDeliveryFee] = useState(null);
+  const [distanceKm, setDistanceKm] = useState(null);
+  const [quoting, setQuoting] = useState(false);
+  const [quoteEstimated, setQuoteEstimated] = useState(false);
 
-  const deliveryFee = delivery === "eco" ? Math.round(subtotal * 0.10) : Math.round(subtotal * 0.15);
-  const total = subtotal + deliveryFee;
+  const GST_RATE = 0.18;                        // 18% GST on goods
+  const gst = Math.round(subtotal * GST_RATE);
+  const total = subtotal + gst + (deliveryFee || 0);
+
+  // Fetch the distance-based delivery fee whenever the selected address changes.
+  useEffect(() => {
+    if (!selectedAddress) { setDeliveryFee(null); setDistanceKm(null); return; }
+    let cancelled = false;
+    setQuoting(true);
+    fetch("/api/delivery-quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        address: selectedAddress.address,
+        city: selectedAddress.city,
+        pincode: selectedAddress.pincode,
+      }),
+    })
+      .then(r => r.json())
+      .then(q => {
+        if (cancelled) return;
+        setDeliveryFee(typeof q.fee === "number" ? q.fee : 40);
+        setDistanceKm(q.distanceKm ?? null);
+        setQuoteEstimated(!!q.estimated);
+      })
+      .catch(() => { if (!cancelled) { setDeliveryFee(40); setDistanceKm(null); setQuoteEstimated(true); } })
+      .finally(() => { if (!cancelled) setQuoting(false); });
+    return () => { cancelled = true; };
+  }, [selectedAddress]);
 
   useEffect(() => {
     if (!user) navigate("/login", { state: { from: "/checkout" } });
@@ -159,12 +189,13 @@ export default function CheckoutPage() {
   const validate = () => {
     const e = {};
     if (!selectedAddress) e.address = "Please select a delivery address.";
+    else if (quoting) e.address = "Please wait — calculating delivery fee.";
     if (!mobile.match(/^[6-9]\d{9}$/)) e.mobile = "Enter valid 10-digit number";
     return e;
   };
 
   // ── Save order to Firestore ────────────────────────────────────────────────
-  const finaliseOrder = async ({ paymentId = null, paymentStatus = "pending" } = {}) => {
+  const finaliseOrder = async ({ paymentId = null, razorpayOrderId = null, paymentStatus = "pending" } = {}) => {
     const orderPayload = {
       customerId: user.uid,
       customerName: selectedAddress.name,
@@ -173,11 +204,14 @@ export default function CheckoutPage() {
       address: selectedAddress.address,
       city: selectedAddress.city,
       pincode: selectedAddress.pincode,
-      deliveryType: delivery,
-      deliveryFee,
+      deliveryType: "standard",
+      deliveryFee: deliveryFee || 0,
+      distanceKm,
+      gst,
       payment,
       paymentStatus,   // "pending" for COD, "paid" for online
       paymentId,       // Razorpay payment ID (null for COD)
+      razorpayOrderId, // Razorpay order ID (null for COD)
       subtotal,
       total,
       items: cart.map(i => ({ id: i.id, name: i.name, weight: i.weight, qty: i.qty, price: i.price })),
@@ -198,10 +232,27 @@ export default function CheckoutPage() {
       return;
     }
 
+    // Create the order server-side (which holds the key secret) and get its order_id.
+    let rzpOrder;
+    try {
+      const r = await fetch("/api/razorpay-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: total }),
+      });
+      rzpOrder = await r.json();
+      if (!r.ok) throw new Error(rzpOrder.error || "Could not start payment");
+    } catch (err) {
+      alert(err.message || "Could not start payment. Please try again.");
+      setPlacing(false);
+      return;
+    }
+
     const options = {
-      key: RAZORPAY_KEY_ID,
-      amount: total * 100,           // Razorpay expects paise
-      currency: "INR",
+      key: rzpOrder.keyId || RAZORPAY_KEY_ID,
+      amount: rzpOrder.amount,       // paise, from the server-created order
+      currency: rzpOrder.currency || "INR",
+      order_id: rzpOrder.orderId,    // ties the payment to a verifiable server order
       name: "Root Grains",
       description: `Order — ${cart.length} item(s)`,
       image: "/logo.png",
@@ -212,15 +263,35 @@ export default function CheckoutPage() {
       },
       notes: {
         address: selectedAddress?.address || "",
-        delivery: delivery,
       },
       theme: { color: "#3b1f0e" },
 
       // ── Payment success handler ────────────────────────────────────────────
       handler: async function (response) {
         try {
+          // Verify the signature server-side before trusting the payment.
+          const v = await fetch("/api/razorpay-verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderId: response.razorpay_order_id,
+              paymentId: response.razorpay_payment_id,
+              signature: response.razorpay_signature,
+            }),
+          });
+          const vr = await v.json().catch(() => ({}));
+          if (!v.ok || !vr.ok) {
+            alert(
+              "Payment could not be verified. If money was deducted it will be " +
+              "auto-refunded by Razorpay.\nPayment ID: " + response.razorpay_payment_id +
+              "\nPlease contact support with this ID."
+            );
+            setPlacing(false);
+            return;
+          }
           const orderId = await finaliseOrder({
             paymentId: response.razorpay_payment_id,
+            razorpayOrderId: response.razorpay_order_id,
             paymentStatus: "paid",
           });
           playSuccessChime();
@@ -229,7 +300,7 @@ export default function CheckoutPage() {
           setSuccessOrderId(orderId);
           setTimeout(() => {
             navigate(`/order-tracking/${orderId}`, {
-              state: { orderId, delivery, deliveryFee, payment, subtotal, total, from: "checkout" },
+              state: { orderId, deliveryFee, gst, distanceKm, payment, subtotal, total, from: "checkout" },
             });
           }, 3000);
         } catch (err) {
@@ -274,7 +345,7 @@ export default function CheckoutPage() {
       setSuccessOrderId(orderId);
       setTimeout(() => {
         navigate(`/order-tracking/${orderId}`, {
-          state: { orderId, delivery, deliveryFee, payment, subtotal, total, from: "checkout" },
+          state: { orderId, deliveryFee, gst, distanceKm, payment, subtotal, total, from: "checkout" },
         });
       }, 3000);
     } catch (err) {
@@ -285,14 +356,6 @@ export default function CheckoutPage() {
 
   if (!user) return null;
   if (successOrderId) return <OrderSuccessPopup orderId={successOrderId} paid={paidOnline} />;
-
-  const deliveryOptionStyle = (active) => ({
-    flex: 1, padding: "14px 10px",
-    border: `2px solid ${active ? "var(--brown-dark)" : "var(--border)"}`,
-    borderRadius: "var(--radius-md)",
-    background: active ? "#f5ede4" : "#fff",
-    cursor: "pointer", textAlign: "left",
-  });
 
   return (
     <div style={s.page}>
@@ -344,21 +407,24 @@ export default function CheckoutPage() {
         {errors.mobile && <span style={{ fontSize: "11px", color: "#e55" }}>{errors.mobile}</span>}
       </div>
 
-      {/* Delivery Type */}
+      {/* Delivery */}
       <div style={s.section}>
-        <p style={s.sectionTitle}>Delivery Type</p>
-        <div style={s.row}>
-          <button onClick={() => setDelivery("eco")} style={deliveryOptionStyle(delivery === "eco")}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: delivery === "eco" ? "var(--brown-dark)" : "var(--text)", marginBottom: 2 }}>Eco Delivery</div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>Standard speed</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--brown-dark)" }}>₹{Math.round(subtotal * 0.10)}</div>
-          </button>
-          <button onClick={() => setDelivery("rapid")} style={deliveryOptionStyle(delivery === "rapid")}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: delivery === "rapid" ? "var(--brown-dark)" : "var(--text)", marginBottom: 2 }}>Rapid Delivery</div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>Priority speed</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--brown-dark)" }}>₹{Math.round(subtotal * 0.15)}</div>
-          </button>
-        </div>
+        <p style={s.sectionTitle}>Delivery</p>
+        {!selectedAddress ? (
+          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Select a delivery address to calculate the delivery fee.</p>
+        ) : quoting ? (
+          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Calculating delivery fee…</p>
+        ) : (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", border: "2px solid var(--brown-dark)", borderRadius: "var(--radius-md)", background: "#f5ede4" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--brown-dark)" }}>Standard Delivery</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                {distanceKm != null ? `≈ ${distanceKm} km from store` : "Distance estimate"}{quoteEstimated ? " · estimated" : ""}
+              </div>
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--brown-dark)" }}>₹{deliveryFee ?? "—"}</div>
+          </div>
+        )}
       </div>
 
       {/* Payment Method */}
@@ -412,8 +478,12 @@ export default function CheckoutPage() {
             <span style={{ fontWeight: 600, color: "var(--text)" }}>₹{subtotal}</span>
           </div>
           <div style={s.summaryRow}>
-            <span>{delivery === "eco" ? "Eco Delivery" : "Rapid Delivery"}</span>
-            <span style={{ fontWeight: 600, color: "var(--text)" }}>₹{deliveryFee}</span>
+            <span>GST (18%)</span>
+            <span style={{ fontWeight: 600, color: "var(--text)" }}>₹{gst}</span>
+          </div>
+          <div style={s.summaryRow}>
+            <span>Delivery{distanceKm != null ? ` (≈${distanceKm} km)` : ""}</span>
+            <span style={{ fontWeight: 600, color: "var(--text)" }}>{deliveryFee != null ? `₹${deliveryFee}` : (selectedAddress ? "…" : "Select address")}</span>
           </div>
           <div style={{ ...s.summaryRow, fontSize: "16px", fontWeight: "700", color: "var(--brown-dark)" }}>
             <span>Total</span>

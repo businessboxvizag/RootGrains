@@ -142,21 +142,29 @@ easiest path for the first build.
 
 ---
 
-## H. Payments (Razorpay) — after the PAN clears
+## H. Payments (Razorpay) — built; just add your keys
 
-Currently online payment shows "Coming soon"; Cash on Delivery works. When the
-Razorpay account is activated (needs the PAN):
+The secure Razorpay flow is now fully implemented and needs no code changes —
+only the keys as env vars once your Razorpay account is activated (PAN):
 
-1. Put the **live Key ID** in `src/checkout/CheckoutPage.jsx` (replace
-   `rzp_test_YOUR_KEY_HERE`).
-2. **Important — add server-side signature verification.** The current checkout
-   verifies payment on the client only, which is not safe for real money. The
-   Saardha backend already has a working Razorpay integration
-   (`server/routes/payments.js`, `server/config/razorpay.js`) that can be reused:
-   add a Vercel function (e.g. `api/verify-payment.js`) that verifies
-   `razorpay_signature` with the key **secret** (server-side env var) before the
-   order is marked paid.
-3. Move the key secret to a Vercel env var — never commit it.
+- `api/razorpay-order.js` — creates the Razorpay order server-side (holds the secret).
+- `api/razorpay-verify.js` — verifies the payment signature (HMAC-SHA256, constant-time).
+- `src/checkout/CheckoutPage.jsx` — creates the order, opens Checkout with the
+  server `order_id`, and **verifies the signature server-side before marking the
+  order paid**. This closes the "client-only verification" security gap.
+
+**To turn it on, add these env vars in Vercel** (Settings → Environment Variables):
+
+| Name | Scope | Value |
+|------|-------|-------|
+| `VITE_RAZORPAY_KEY_ID` | Build (client) | Your Key ID, `rzp_live_…` (or `rzp_test_…` to test). Publishable — safe in the browser. |
+| `RAZORPAY_KEY_ID` | Server | Same Key ID. |
+| `RAZORPAY_KEY_SECRET` | Server | The Key **secret** — server-only, never commit or expose. |
+
+Redeploy after adding them. The "Online Payment" option auto-enables when
+`VITE_RAZORPAY_KEY_ID` is a valid `rzp_…` key; otherwise it shows "Coming soon"
+and Cash on Delivery keeps working. Test with `rzp_test_…` keys first (use
+Razorpay's test card `4111 1111 1111 1111`) before switching to live keys.
 
 ---
 

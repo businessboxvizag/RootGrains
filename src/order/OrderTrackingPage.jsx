@@ -135,7 +135,7 @@ export default function OrderTrackingPage() {
         <p style={{ fontSize: "12px", fontWeight: "800", color: "var(--brown-dark)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "10px" }}>Delivery Info</p>
         <p style={{ fontSize: "13px", color: "var(--text)", marginBottom: "4px" }}>{order.address}, {order.city} - {order.pincode}</p>
         <p style={{ fontSize: "13px", color: "var(--text)", marginBottom: "4px" }}>
-          {order.deliveryType === "rapid" ? "Rapid Delivery" : "Eco Delivery"}
+          Standard Delivery{order.distanceKm != null ? ` · ≈${order.distanceKm} km` : ""}
         </p>
         <p style={{ fontSize: "13px", color: "var(--text)" }}>{order.payment === "cod" ? "Cash on Delivery" : "Online Payment"}</p>
       </div>
@@ -155,9 +155,15 @@ export default function OrderTrackingPage() {
               <span>Subtotal</span>
               <span>₹{order.subtotal || order.total}</span>
             </div>
+            {order.gst !== undefined && order.gst > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "var(--text-muted)", marginBottom: "4px" }}>
+                <span>GST (18%)</span>
+                <span>₹{order.gst}</span>
+              </div>
+            )}
             {order.deliveryFee !== undefined && (
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "var(--text-muted)", marginBottom: "4px" }}>
-                <span>{order.deliveryType === "rapid" ? "Rapid Delivery" : "Eco Delivery"}</span>
+                <span>Delivery{order.distanceKm != null ? ` (≈${order.distanceKm} km)` : ""}</span>
                 <span>₹{order.deliveryFee}</span>
               </div>
             )}

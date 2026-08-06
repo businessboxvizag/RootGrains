@@ -156,39 +156,37 @@ function Home() {
       <Products />
 
       {/* Footer */}
-      <div style={{ background: "#3b1f0e", color: "#fff", padding: "28px 20px 24px", marginBottom: 64 }}>
+      <div style={{ background: "#3b1f0e", color: "#fff", padding: "16px 18px 12px", marginBottom: 64 }}>
         {/* Logo + name */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-          <img src="/logo.png" alt="Root Grains" style={{ width: 36, height: 36, objectFit: "contain", borderRadius: 8 }} />
-          <span style={{ fontSize: 16, fontWeight: 800, fontFamily: "var(--font-display)" }}>Root Grains</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <img src="/logo.png" alt="Root Grains" style={{ width: 24, height: 24, objectFit: "contain", borderRadius: 6 }} />
+          <span style={{ fontSize: 14, fontWeight: 800, fontFamily: "var(--font-display)" }}>Root Grains</span>
         </div>
 
-        {/* Address */}
-        <div style={{ marginBottom: 14 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Our Store</p>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", lineHeight: 1.7 }}>
-            Ground Floor, 13/24/61, Raythu Bazar Road,<br />
-            Near Petrol Bunk, New Gajuwaka,<br />
-            Visakhapatnam, Andhra Pradesh
-          </p>
+        {/* Store + Contact side by side */}
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 180px", minWidth: 160 }}>
+            <p style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 3 }}>Our Store</p>
+            <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.8)", lineHeight: 1.45 }}>
+              Ground Floor, 13/24/61, Raythu Bazar Road, Near Petrol Bunk, New Gajuwaka, Visakhapatnam, AP
+            </p>
+          </div>
+          <div>
+            <p style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 3 }}>Contact</p>
+            <a href="tel:+916302876180" style={{ fontSize: 12.5, fontWeight: 700, color: "#fff", textDecoration: "none", whiteSpace: "nowrap" }}>
+              📞 +91 63028 76180
+            </a>
+          </div>
         </div>
 
-        {/* Phone */}
-        <div style={{ marginBottom: 20 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 6 }}>Contact</p>
-          <a href="tel:+916302876180" style={{ fontSize: 15, fontWeight: 700, color: "#fff", textDecoration: "none", display: "flex", alignItems: "center", gap: 8 }}>
-            📞 +91 63028 76180
-          </a>
-        </div>
-
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16, textAlign: "center" }}>
-          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: 12, paddingTop: 10, textAlign: "center" }}>
+          <p style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>
             Powered by{" "}
             <a
               href="https://www.businessbox.org.in/"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: "rgba(255,255,255,0.75)", fontWeight: 700, textDecoration: "none" }}
+              style={{ color: "rgba(255,255,255,0.7)", fontWeight: 700, textDecoration: "none" }}
             >
               BusinessBox
             </a>

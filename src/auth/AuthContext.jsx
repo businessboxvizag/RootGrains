@@ -47,6 +47,8 @@ export function AuthProvider({ children }) {
         signInWithEmailLink(auth, savedEmail, window.location.href)
           .then(async (result) => {
             localStorage.removeItem(EMAIL_LINK_KEY);
+            // Strip the Firebase sign-in params from the URL for a clean address.
+            try { window.history.replaceState({}, document.title, appBaseUrl() + "/#/"); } catch { /* ignore */ }
             if (result.user) {
               // Check if this account already exists (by UID or email)
               const byUid = await getCustomer(result.user.uid);
@@ -115,7 +117,9 @@ export function AuthProvider({ children }) {
   // ── Email magic link ───────────────────────────────────────────────────────
   const sendEmailLink = async (email) => {
     const actionCodeSettings = {
-      url: appBaseUrl() + "/#/login",
+      // Must be a plain (non-hash) URL — Firebase appends its params as a query
+      // string, and a hash route (/#/login) would hide them from the SDK.
+      url: appBaseUrl() + "/",
       handleCodeInApp: true,
     };
     await sendSignInLinkToEmail(auth, email, actionCodeSettings);
