@@ -1,5 +1,4 @@
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
@@ -14,8 +13,9 @@ const firebaseConfig = {
 };
 
 // Main app — used by the store (customer auth + Firestore)
+// Note: Firebase Analytics was removed — it required the Installations API and
+// spammed 403s in the console without adding value for the storefront.
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 export const db = getFirestore(app, "default");
 export const auth = getAuth(app);
 
