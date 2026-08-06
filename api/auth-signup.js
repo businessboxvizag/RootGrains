@@ -14,13 +14,22 @@
 import admin from "firebase-admin";
 import bcrypt from "bcryptjs";
 
+function parseServiceAccount(raw) {
+  let s = (raw || "").trim(); // strip stray leading/trailing whitespace/newlines
+  // Accept a base64-encoded JSON too (immune to paste/newline issues).
+  if (s && !s.startsWith("{")) {
+    try { s = Buffer.from(s, "base64").toString("utf8").trim(); } catch { /* not base64 */ }
+  }
+  const creds = JSON.parse(s);
+  // If the private key came in with literal "\n", restore real newlines.
+  if (creds.private_key) creds.private_key = creds.private_key.replace(/\\n/g, "\n");
+  return creds;
+}
+
 function getDb() {
   if (!process.env.FIREBASE_SERVICE_ACCOUNT) return null;
   if (!admin.apps.length) {
-    const creds = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    // Vercel often stores the private key with literal "\n" — restore real newlines.
-    if (creds.private_key) creds.private_key = creds.private_key.replace(/\\n/g, "\n");
-    admin.initializeApp({ credential: admin.credential.cert(creds) });
+    admin.initializeApp({ credential: admin.credential.cert(parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT)) });
   }
   return admin.firestore();
 }
